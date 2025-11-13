@@ -1,0 +1,13 @@
+# data & logs
+data/
+nginx/logs/*
+!nginx/logs/.gitkeep
+
+# dotenv (create locally)
+.env
+
+# misc
+.DS_Store
+Thumbs.db
+
+
