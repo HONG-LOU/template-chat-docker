@@ -83,5 +83,6 @@ services:
       - ./nginx/html:/usr/share/nginx/html:ro
       - ./nginx/logs:/var/log/nginx
       - ./nginx/certs:/etc/nginx/certs:ro
+      - ./nginx/registry.htpasswd:/etc/nginx/registry.htpasswd:ro
 
 volumes: {}
