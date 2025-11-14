@@ -26,6 +26,64 @@
 - NGINX: 80（对外统一入口）
   - `/` 反向代理到 `127.0.0.1:3001`（前端）
   - `/api/` 反向代理到 `127.0.0.1:8001`（后端）
+  - `/v2/`（HTTP 80）自动 301 跳转到 HTTPS
+
+### 使用自有域名与 HTTPS 推送镜像（template-chat.xyz）
+本模板已内置私有 Registry（`registry:2`，监听 5000）和 NGINX 反代。为域名 `template-chat.xyz` 增加了 443 端口的 HTTPS 入口：
+
+1) 放置证书（必须）
+   - 将你的证书文件放入：`nginx/certs/template-chat.xyz/`
+     - `fullchain.pem`
+     - `privkey.pem`
+   - 容器内将通过 `/etc/nginx/certs/template-chat.xyz/{fullchain.pem,privkey.pem}` 引用
+
+2) 启动 / 重载
+```bash
+docker compose up -d
+# 已在运行：
+docker compose restart nginx
+```
+
+3) 验证可用性
+```bash
+curl -I https://template-chat.xyz/v2/
+# 期待：HTTP/2 200 或 401（若启用 Basic Auth）
+```
+
+4) 客户端登录并推送镜像
+```bash
+# 登录（若未启用 Basic Auth，仅 TLS，login 也会成功但可省略）
+docker login template-chat.xyz
+
+# 构建并推送
+docker build -t template-chat.xyz/your-namespace/your-app:1.0.0 .
+docker push template-chat.xyz/your-namespace/your-app:1.0.0
+
+# 查看仓库与标签
+curl -s https://template-chat.xyz/v2/_catalog | jq .
+curl -s https://template-chat.xyz/v2/your-namespace/your-app/tags/list | jq .
+```
+
+5)（可选）开启 Basic Auth 认证
+- 生成 `htpasswd` 文件（在宿主机任意位置执行）：
+```bash
+# 如果没有 htpasswd，可安装 apache2-utils（Debian/Ubuntu）或 httpd-tools（CentOS/RHEL）
+htpasswd -Bc nginx/registry.htpasswd <username>
+```
+- 编辑 `nginx/nginx.conf` 中 HTTPS server 下的 `/v2/`，取消两行注释：
+  - `auth_basic "Private Docker Registry";`
+  - `auth_basic_user_file /etc/nginx/registry.htpasswd;`
+- 并在 `docker-compose.yml` 的 nginx 服务中增加挂载：
+```yaml
+    volumes:
+      - ./nginx/registry.htpasswd:/etc/nginx/registry.htpasswd:ro
+```
+- 重启 NGINX：`docker compose restart nginx`
+- 再次登录：`docker login template-chat.xyz`
+
+6) 删除镜像与垃圾回收
+- 本模板已启用 `REGISTRY_STORAGE_DELETE_ENABLED=true`
+- 删除 manifest 后可按需停库执行 GC 以回收空间（请参考官方文档）
 
 说明：请在同一台服务器上部署或运行你的前端服务（监听 3001）和后端服务（监听 8001），NGINX 将统一在 80 端口对外提供访问。
 
